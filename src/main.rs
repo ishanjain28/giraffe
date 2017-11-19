@@ -1,15 +1,16 @@
 extern crate x11;
 
 use std::ffi;
-use std::os::raw::c_char;
+use std::os::raw;
 use x11::xlib;
 use std::fmt;
-use std::ptr;
+use std::mem;
+use std::io::Read;
 
 
 struct Display {
-    width: i32,
-    height: i32,
+    width: u32,
+    height: u32,
     refer: *mut xlib::_XDisplay,
 }
 
@@ -26,22 +27,19 @@ fn main() {
 
     let d = Display::new(s);
 
-    d.fetch_window_attributes();
+    let attribs = d.fetch_window_attributes();
 
-    println!("{}", d);
-
+    println!("{:?}", attribs);
 
     let img = d.get_image();
 
-    unsafe {
-        println!("{}", (*img).depth);
-    }
 
-    //if !display.is_null() {
+
+    println!("");
+
+    println!("{:?}", img);
+
     println!("image Captured");
-    // } else {
-    println!("No Image Captured");
-    //  }
 }
 
 impl Display {
@@ -50,12 +48,12 @@ impl Display {
         let x_img_n_ptr: *mut x11::xlib::XImage;
 
         let display = open_display(s.as_ptr());
-        let h: i32;
-        let w: i32;
+        let h: u32;
+        let w: u32;
 
         unsafe {
-            w = xlib::XDisplayWidth(display, 0);
-            h = xlib::XDisplayHeight(display, 0);
+            w = xlib::XDisplayWidth(display, 0) as u32;
+            h = xlib::XDisplayHeight(display, 0) as u32;
         }
         let d = Display {
             height: h,
@@ -65,42 +63,38 @@ impl Display {
         d
     }
 
-    fn get_resolution(&self) -> (i32, i32) {
+    fn get_resolution(&self) -> (u32, u32) {
         (self.width, self.height)
     }
 
-    fn fetch_window_attributes(&self) -> *mut xlib::XWindowAttributes {
-        let mut window_attribs: *mut xlib::XWindowAttributes = ptr::null_mut();
+    fn fetch_window_attributes(&self) -> xlib::XWindowAttributes {
+        let mut window_attribs;
 
         unsafe {
-
+            window_attribs = mem::uninitialized();
             let window = xlib::XRootWindow(self.refer, 0);
 
-            let status = xlib::XGetWindowAttributes(self.refer, window, window_attribs);
-            println!("Status: {}", status);
+            let status = xlib::XGetWindowAttributes(self.refer, window, &mut window_attribs);
+            println!("Window Attributes Status: {}", status);
         };
-
-
         window_attribs
     }
 
-    fn get_image(&self) -> *mut xlib::XImage {
+    fn get_image(&self) -> xlib::XImage {
 
-        let img: *mut xlib::XImage;
-
+        let mut img;
         unsafe {
-            img = xlib::XGetImage(
+            img = *(xlib::XGetImage(
                 self.refer,
                 xlib::XDefaultRootWindow(self.refer),
                 0,
                 0,
-                1920,
-                1080,
-                1,
+                self.width,
+                self.height,
+                xlib::XAllPlanes(),
                 xlib::ZPixmap,
-            );
+            ));
         };
-
         img
     }
 }
@@ -111,10 +105,9 @@ impl fmt::Display for Display {
     }
 }
 
-
 fn create_pixmap(d: xlib::Display) {}
 
-fn open_display(d: *const c_char) -> *mut x11::xlib::Display {
+fn open_display(d: *const raw::c_char) -> *mut x11::xlib::Display {
     let display: *mut x11::xlib::Display;
     unsafe {
         display = x11::xlib::XOpenDisplay(d);
