@@ -1,12 +1,13 @@
 extern crate x11;
+extern crate image;
+
 
 use std::ffi;
 use std::os::raw;
 use x11::xlib;
 use std::fmt;
 use std::mem;
-use std::io::Read;
-
+use std::slice;
 
 struct Display {
     width: u32,
@@ -29,18 +30,27 @@ fn main() {
 
     let attribs = d.fetch_window_attributes();
 
-    println!("{:?}", attribs);
-
     let img = d.get_image();
 
 
+    let data;
+    unsafe {
+        data = slice::from_raw_parts(img.data, (img.bytes_per_line * img.height) as usize);
+    }
 
-    println!("");
+    //read &[i8] and convert to &[u8]
+    let mut u8_data: Vec<u8> = Vec::new();
 
-    println!("{:?}", img);
+    for i in data {
+        u8_data.push(*i as u8);
+    }
 
-    println!("image Captured");
+    let i = image::load_from_memory(u8_data.as_slice()).expect("Failed to read image");
+
+
+
 }
+
 
 impl Display {
     fn new(s: std::ffi::CString) -> Display {
@@ -75,7 +85,7 @@ impl Display {
             let window = xlib::XRootWindow(self.refer, 0);
 
             let status = xlib::XGetWindowAttributes(self.refer, window, &mut window_attribs);
-            println!("Window Attributes Status: {}", status);
+            //println!("Window Attributes Status: {}", status);
         };
         window_attribs
     }
