@@ -4,5 +4,5 @@ version = "0.1.0"
 authors = ["Ishan Jain <ishanjain28@gmail.com>"]
 
 [dependencies]
-x11 = "2.16.0"
 image = "0.17.0"
+x11cap = "0.4.1"

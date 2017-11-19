@@ -3,7 +3,7 @@ name = "walnut"
 version = "0.1.0"
 dependencies = [
  "image 0.17.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "x11 2.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "x11cap 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -258,6 +258,15 @@ dependencies = [
  "metadeps 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
+[[package]]
+name = "x11cap"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "libc 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)",
+ "x11 2.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
 [metadata]
 "checksum adler32 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6cbd0b9af8587c72beadc9f72d35b9fbb070982c9e6203e46e93f10df25f8f45"
 "checksum bitflags 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "aad18937a628ec6abcd26d1489012cc0e18c21798210f491af69ded9b881106d"
@@ -293,3 +302,4 @@ dependencies = [
 "checksum scopeguard 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "94258f53601af11e6a49f722422f6e3425c52b06245a5cf9bc09908b174f5e27"
 "checksum toml 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "736b60249cb25337bc196faa43ee12c705e426f3d55c214d73a4e7be06f92cb4"
 "checksum x11 2.16.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f37d39a3d2f491abf5dffd6aeda4fd21edc9ebc8a93db54b272a8ec8aaa31f0e"
+"checksum x11cap 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "16ccedf556cb1f784d462dd8f24a7804f766d57c0051439d3e4052465263c399"
