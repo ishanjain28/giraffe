@@ -1,13 +1,18 @@
-extern crate x11cap;
 extern crate gif;
+extern crate x11;
+extern crate x11cap;
 
+#[macro_use]
+extern crate log;
+extern crate fern;
+extern crate chrono;
 
 use std::fs::File;
-use std::{thread, time};
-use std::sync::mpsc;
-use std::sync::mpsc::{Sender, Receiver};
+use std::ffi;
 
 mod capturer;
+mod draw;
+mod utils;
 
 struct Captures<'a> {
     seq: i64,
@@ -16,6 +21,48 @@ struct Captures<'a> {
 }
 
 fn main() {
+    // setup logger
+    fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "{}[{}][{}] {}",
+                chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
+                record.target(),
+                record.level(),
+                message
+            ))
+        })
+        .level(log::LogLevelFilter::Debug)
+        .chain(std::io::stdout())
+        .apply()
+        .unwrap();
+
+
+    // Detect WS and load appropriate crates
+    // detect window system
+    let ws = utils::detect_ws();
+    match ws {
+        Ok(v) => {
+            if v == utils::ws::X11 {
+                info!("X11 WS detected");
+            } else {
+
+                info!("Wayland Detected");
+            }
+        }
+        Err(e) => {
+            error!("Could not identify window system");
+        }
+    }
+    let s = ffi::CString::new(":0").unwrap();
+    draw::draw_transparent_window(s.as_ptr());
+}
+
+
+
+
+fn start_capturing() {
+
     let c = x11cap::CaptureSource::Region {
         x: 200,
         y: 200,
@@ -25,59 +72,44 @@ fn main() {
 
     let mut d = x11cap::Capturer::new(c).unwrap();
 
-    let mut file = File::create("img.gif").unwrap();
+    // let mut file = File::create("img.gif").unwrap();
     let color_map = &[0xFF, 0xFF, 0xFA];
 
     let geometry = d.get_geometry();
 
-    let mut filef = gif::Encoder::new(
-        file,
-        geometry.width as u16,
-        geometry.height as u16,
-        color_map,
-    ).expect("Error in creating gif encoder");
+    //    let mut filef = gif::Encoder::new(
+    //     file,
+    //    geometry.width as u16,
+    //   geometry.height as u16,
+    //  color_map,
+    // ).expect("Error in creating gif encoder");
 
     //    let (tx, rx): (Sender<Captures>, Receiver<Captures>) = mpsc::channel();
-    let mut caps = Vec::new();
 
-    let mut i = 1;
-    loop {
-        let mut f = d.capture_frame().unwrap();
-        let img = convert(f);
-        let mut c = Captures {
-            seq: i,
-            Image: img,
-            Frame: None,
-        };
+    let mut f = d.capture_frame().unwrap();
+    let img = convert(f);
+    //let mut c = Captures {
+    //   seq: i,
+    // Image: img,
+    // Frame: None,
+    //};
 
-        thread::spawn(move || {
-            let mut frame = gif::Frame::from_rgb(
-                geometry.width as u16,
-                geometry.height as u16,
-                c.Image.as_slice(),
-            );
+    //let mut frame = gif::Frame::from_rgb(
+    //  geometry.width as u16,
+    //geometry.height as u16,
+    // c.Image.as_slice(),
+    // );
 
-            frame.delay = 10;
-            c.Image = Vec::new();
-            c.Frame = Some(frame);
+    // frame.delay = 10;
+    // c.Image = Vec::new();
+    // c.Frame = Some(frame);
 
+    // });
 
-            caps.insert(c.seq as usize, c);
-        });
+    //        println!("Capturing frame {}", i);
 
-        if i > 300 {
-            break;
-        }
-        thread::sleep(time::Duration::from_millis(40));
-        println!("Capturing frame {}", i);
-        i += 1;
-    }
-
-    for i in caps {
-        filef.write_frame(&i.Frame.unwrap());
-    }
+    //        filef.write_frame(&i.Frame.unwrap());
 }
-
 fn convert(u: x11cap::Image) -> Vec<u8> {
     let mut v: Vec<u8> = Vec::new();
 

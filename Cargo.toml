@@ -6,3 +6,7 @@ authors = ["Ishan Jain <ishanjain28@gmail.com>"]
 [dependencies]
 x11cap = "0.4.1"
 gif = "0.9.2"
+x11 = "2.16.0"
+chrono = "0.4.0"
+log = "0.3"
+fern = "0.4"
