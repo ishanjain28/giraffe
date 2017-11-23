@@ -1,11 +1,13 @@
 extern crate gif;
 extern crate x11;
 extern crate x11cap;
+extern crate gl;
 
 #[macro_use]
 extern crate log;
 extern crate fern;
 extern crate chrono;
+
 
 use std::fs::File;
 use std::ffi;
