@@ -1,7 +1,6 @@
 extern crate gif;
 extern crate x11;
 extern crate x11cap;
-extern crate gl;
 
 #[macro_use]
 extern crate log;
@@ -57,7 +56,9 @@ fn main() {
         }
     }
     let s = ffi::CString::new(":0").unwrap();
-    draw::draw_transparent_window(s.as_ptr());
+    //    draw::draw_transparent_window(s.as_ptr());
+
+    draw::draw_selection_window(s.as_ptr());
 }
 
 
