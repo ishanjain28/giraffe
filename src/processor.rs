@@ -4,6 +4,7 @@ extern crate gif;
 use std::sync::{mpsc, Arc, Mutex};
 use std::fs::File;
 use std::thread;
+use std::boxed::Box;
 
 use record;
 
@@ -23,7 +24,7 @@ impl ThreadPool {
     fn new(
         u: usize,
         rx: mpsc::Receiver<record::Image>,
-        res_tx: mpsc::Sender<gif::Frame>,
+        res_tx: mpsc::Sender<gif::Frame<'static>>,
     ) -> ThreadPool {
         let mut workers = Vec::with_capacity(u);
         let receiver = Arc::new(Mutex::new(rx));
@@ -39,7 +40,7 @@ impl ThreadPool {
         &mut self,
         u: usize,
         rx: mpsc::Receiver<record::Image>,
-        res_tx: mpsc::Sender<gif::Frame>,
+        res_tx: mpsc::Sender<gif::Frame<'static>>,
     ) {
 
         let receiver = Arc::new(Mutex::new(rx));
@@ -59,8 +60,10 @@ impl Worker {
     fn new<'a>(
         id: usize,
         rx: Arc<Mutex<mpsc::Receiver<record::Image>>>,
-        results: Arc<Mutex<mpsc::Sender<gif::Frame<'a>>>>,
+        results: Arc<Mutex<mpsc::Sender<gif::Frame<'static>>>>,
     ) -> Worker {
+
+        let results_clone = mpsc::Sender::clone(&results.lock().unwrap());
 
         let t = thread::spawn(move || loop {
 
@@ -68,10 +71,12 @@ impl Worker {
 
             match rx.recv() {
                 Ok(v) => {
+
+                    // Free lock so other threads can use it
                     drop(rx);
                     println!("{} {:?}", id, v);
 
-                    Worker::work(v, results);
+                    Worker::work(v, results_clone);
                 }
                 Err(e) => {
                     break;
@@ -86,15 +91,13 @@ impl Worker {
         }
     }
 
-    fn work(v: record::Image, res: Arc<Mutex<mpsc::Sender<gif::Frame>>>) {
+    fn work(v: record::Image, res_tx: mpsc::Sender<gif::Frame>) {
 
         let bgr8_slice = v.Image.as_slice();
 
         let mut frame = gif::Frame::from_rgb(v.width, v.height, convert(bgr8_slice).as_slice());
 
-        let tx = res.lock().unwrap();
-
-        tx.send(frame);
+        res_tx.send(frame);
 
     }
 }
@@ -107,8 +110,9 @@ pub fn process(rx: mpsc::Receiver<record::Image>, file: &mut File) {
 
     let mut filef = gif::Encoder::new(f, 1000, 1000, color_map).expect("Failed to create encoder");
 
-    let (res_tx, res_rx): (mpsc::Sender<gif::Frame>, mpsc::Receiver<gif::Frame>) = mpsc::channel();
 
+    let (res_tx, res_rx): (mpsc::Sender<gif::Frame<'static>>,
+                           mpsc::Receiver<gif::Frame<'static>>) = mpsc::channel();
 
     let pool = ThreadPool::new(8, rx, res_tx);
 
