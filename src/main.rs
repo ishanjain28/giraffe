@@ -1,6 +1,7 @@
 extern crate gif;
 extern crate x11;
 extern crate x11cap;
+extern crate rayon;
 
 #[macro_use]
 extern crate log;
@@ -70,11 +71,10 @@ fn main() {
 
     thread::spawn(move || {
 
-        thread::sleep(time::Duration::from_millis(10000));
+        thread::sleep(time::Duration::from_millis(20000));
         //    selectora):draw_selection_window(&giraffe);
 
         let mut d = is_rec.write().unwrap();
-        println!("STOPPED RECORDING THE SCREENSHOTS, NOW I AM JUST PROCESSING THEM");
 
         *d = false;
 
@@ -84,10 +84,10 @@ fn main() {
     thread::spawn(move || {
 
         let capture_region = x11cap::CaptureSource::Region {
-            x: 500,
-            y: 40,
-            width: 500,
-            height: 500,
+            x: 0,
+            y: 0,
+            width: 1920,
+            height: 1080,
         };
 
         let mut d = match x11cap::Capturer::new(capture_region) {
@@ -109,10 +109,6 @@ fn main() {
 
             drop(is_recording);
 
-
-            println!("IS_RECORDING? {}", is_rec);
-
-
             let mut q = match d.capture_frame() {
                 Ok(v) => v,
                 Err(e) => {
@@ -128,8 +124,9 @@ fn main() {
                 height: dimensions.1 as u16,
             };
 
+            println!("Recording Frame {} ", count);
 
-            //            println!("Recording Frame {} ", count);
+            //            println!("IS_RECORDING? {}", is_rec);
 
             tx.send(q);
             count += 1;
@@ -152,6 +149,7 @@ fn main() {
         }
     };
 
+    println!("Starting Processor");
 
     // start processor
     processor::process(rx, &mut fs);

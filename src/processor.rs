@@ -1,125 +1,119 @@
 extern crate x11cap;
 extern crate gif;
+extern crate rayon;
 
 use std::sync::{mpsc, Arc, Mutex};
 use std::fs::File;
 use std::thread;
-use std::boxed::Box;
+use rayon::ThreadPool;
 
 use record;
 
-#[derive(Debug)]
-struct ThreadPool {
-    workers: Vec<Worker>,
+fn work(v: record::Image, tx: Arc<Mutex<mpsc::Sender<record::gifFrame>>>) {
+
+    let bgr8_slice = v.Image.as_slice();
+
+    let mut frame = gif::Frame::from_rgb(v.width, v.height, convert(bgr8_slice).as_slice());
+
+    let tx = tx.lock().unwrap();
+
+
+    tx.send(record::gifFrame {
+        frame: frame,
+        id: v.id,
+    });
+
 }
 
-#[derive(Debug)]
-struct Worker {
-    busy: bool,
-    id: usize,
-    thread: thread::JoinHandle<()>,
-}
+pub fn process(rx: mpsc::Receiver<record::Image>, f: &mut File) {
 
-impl ThreadPool {
-    fn new(
-        u: usize,
-        rx: mpsc::Receiver<record::Image>,
-        res_tx: mpsc::Sender<gif::Frame<'static>>,
-    ) -> ThreadPool {
-        let mut workers = Vec::with_capacity(u);
-        let receiver = Arc::new(Mutex::new(rx));
-        let res_tx = Arc::new(Mutex::new(res_tx));
+    let color_map = &[0xFF, 0xFF, 0xFF];
 
-        for id in 0..u {
-            workers.push(Worker::new(id, Arc::clone(&receiver), Arc::clone(&res_tx)));
-        }
-        ThreadPool { workers }
-    }
+    let (res_tx, res_rx): (mpsc::Sender<record::gifFrame>, mpsc::Receiver<record::gifFrame>) =
+        mpsc::channel();
 
-    fn add_workers(
-        &mut self,
-        u: usize,
-        rx: mpsc::Receiver<record::Image>,
-        res_tx: mpsc::Sender<gif::Frame<'static>>,
-    ) {
+    let receiver = Arc::new(Mutex::new(rx));
+    let res_tx = Arc::new(Mutex::new(res_tx));
 
-        let receiver = Arc::new(Mutex::new(rx));
-        let res_tx = Arc::new(Mutex::new(res_tx));
+    let pool = ThreadPool::new(rayon::Configuration::new().num_threads(8)).unwrap();
 
-        for id in 0..u {
-            self.workers.push(Worker::new(
-                id,
-                Arc::clone(&receiver),
-                Arc::clone(&res_tx),
-            ));
-        }
-    }
-}
+    let mut filef = gif::Encoder::new(f, 1920, 1080, color_map).expect("Failed to create encoder");
 
-impl Worker {
-    fn new<'a>(
-        id: usize,
-        rx: Arc<Mutex<mpsc::Receiver<record::Image>>>,
-        results: Arc<Mutex<mpsc::Sender<gif::Frame<'static>>>>,
-    ) -> Worker {
-
-        let results_clone = mpsc::Sender::clone(&results.lock().unwrap());
-
-        let t = thread::spawn(move || loop {
-
-            let rx = rx.lock().unwrap();
+    pool.scope(|s| {
+        loop {
+            let rx = receiver.lock().unwrap();
 
             match rx.recv() {
                 Ok(v) => {
 
                     // Free lock so other threads can use it
                     drop(rx);
-                    println!("{} {:?}", id, v);
+                    let res_tx = Arc::clone(&res_tx);
 
-                    Worker::work(v, results_clone);
+                    s.spawn(|_| work(v, res_tx));
+
                 }
                 Err(e) => {
+
+                    println!("{:?}", e);
+
                     break;
                 }
             }
-        });
+        }
+    });
 
-        Worker {
-            id: id,
-            thread: t,
-            busy: false,
+
+    let mut results = Vec::new();
+
+    loop {
+        match res_rx.recv() {
+            Ok(v) => {
+                results.push(v);
+            }
+            Err(e) => {
+                println!("{:?}", e);
+                break;
+            }
         }
     }
 
-    fn work(v: record::Image, res_tx: mpsc::Sender<gif::Frame>) {
+    let res_len = results.len() - 1;
+    quick_sort(&mut results, 0, res_len as u64 - 1);
 
-        let bgr8_slice = v.Image.as_slice();
+    for i in results {
 
-        let mut frame = gif::Frame::from_rgb(v.width, v.height, convert(bgr8_slice).as_slice());
+        println!("Writing frame {} ", i.id);
 
-        res_tx.send(frame);
-
+        filef.write_frame(&i.frame);
     }
 }
 
-pub fn process(rx: mpsc::Receiver<record::Image>, file: &mut File) {
+fn quick_sort(v: &mut Vec<record::gifFrame>, start: u64, end: u64) {
 
-    let mut f = File::create("img.gif").unwrap();
+    if start < end {
+        let q = partition(v, start, end);
+        quick_sort(v, start, q - 1);
+        quick_sort(v, q + 1, end);
+    }
 
-    let color_map = &[0xFF, 0xFF, 0xFF];
+}
 
-    let mut filef = gif::Encoder::new(f, 1000, 1000, color_map).expect("Failed to create encoder");
+fn partition(v: &mut Vec<record::gifFrame>, start: u64, end: u64) -> u64 {
+    let key = v[end as usize].id;
 
+    let mut i = start - 1;
 
-    let (res_tx, res_rx): (mpsc::Sender<gif::Frame<'static>>,
-                           mpsc::Receiver<gif::Frame<'static>>) = mpsc::channel();
+    for j in start..end {
 
-    let pool = ThreadPool::new(8, rx, res_tx);
+        if v[j as usize].id <= key {
+            i += 1;
+            v.swap(i as usize, j as usize);
+        }
+    }
 
-    //    for v in rx {
-    //  filef.write_frame(&frame);
-
-    // }/
+    v.swap(i as usize + 1, end as usize);
+    return i + 1;
 }
 
 fn convert(s: &[x11cap::Bgr8]) -> Vec<u8> {
