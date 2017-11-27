@@ -1,14 +1,16 @@
 extern crate x11;
 extern crate x11cap;
 
-use x11::xlib;
 use std::sync::mpsc;
-use std::thread;
+use std::{thread, time};
 use std;
 
 #[derive(Debug)]
 pub struct Image {
+    pub id: u64,
     pub Image: x11cap::Image,
+    pub width: u16,
+    pub height: u16,
 }
 
 unsafe impl std::marker::Send for Image {}
@@ -57,12 +59,14 @@ pub fn record(capture_region: x11cap::CaptureSource, tx: mpsc::Sender<Image>) ->
         }
 
     };
-    let q = Image { Image: q };
+    // useless right now
+    //    let q = Image { id: 0, Image: q };
 
     println!("Recording frames");
-    tx.send(q);
+    //  tx.send(q);
 
-    thread::sleep_ms(10);
+    thread::sleep(time::Duration::from_millis(10));
+
 
 
     return true;

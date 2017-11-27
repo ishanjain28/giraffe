@@ -8,10 +8,7 @@ extern crate fern;
 extern crate chrono;
 
 use std::fs::File;
-use std::ffi;
-use x11::xlib;
-use std::os::raw;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, RwLock, mpsc};
 use std::{thread, time};
 
 mod selector;
@@ -23,40 +20,6 @@ struct Captures<'a> {
     seq: i64,
     Frame: Option<gif::Frame<'a>>,
     Image: Vec<u8>,
-}
-
-pub struct Giraffe {
-    pub display: *mut xlib::Display,
-    pub screen_count: i32,
-}
-
-impl Giraffe {
-    fn new(id: *const raw::c_char) -> Giraffe {
-
-        let dpy;
-        let s_count;
-
-        unsafe {
-            dpy = xlib::XOpenDisplay(id);
-            s_count = xlib::XScreenCount(dpy);
-        }
-
-        Giraffe {
-            display: dpy,
-            screen_count: s_count,
-        }
-    }
-    fn get_root_window(&self) -> xlib::Window {
-        unsafe { xlib::XDefaultRootWindow(self.display) }
-    }
-}
-
-impl Drop for Giraffe {
-    fn drop(&mut self) {
-        unsafe {
-            xlib::XCloseDisplay(self.display);
-        }
-    }
 }
 
 fn init_logger() {
@@ -96,26 +59,35 @@ fn main() {
         }
     }
 
-    let s = ffi::CString::new(":0").unwrap();
     //    draw::draw_transparent_window(s.as_ptr());
 
-    // Create a Giraffe
-    let giraffe = Giraffe::new(s.as_ptr());
-
+    // Channel that transports shot images from a thread to image processing threads
     let (tx, rx): (mpsc::Sender<record::Image>, mpsc::Receiver<record::Image>) = mpsc::channel();
 
-    let mut recording = Arc::new(Mutex::new(true));
+    let mut is_rec = Arc::new(RwLock::new(true));
 
-    let mut recording_clone = Arc::clone(&recording);
+    let mut is_rec_clone = is_rec.clone();
 
-    // The thread which captures selected area at 45fps and pushes images to a processing queue
+    thread::spawn(move || {
+
+        thread::sleep(time::Duration::from_millis(10000));
+        //    selectora):draw_selection_window(&giraffe);
+
+        let mut d = is_rec.write().unwrap();
+        println!("STOPPED RECORDING THE SCREENSHOTS, NOW I AM JUST PROCESSING THEM");
+
+        *d = false;
+
+    });
+
+    // The thread which captures selected area and pushes images to a processing queue
     thread::spawn(move || {
 
         let capture_region = x11cap::CaptureSource::Region {
             x: 500,
             y: 40,
-            width: 1000,
-            height: 1000,
+            width: 500,
+            height: 500,
         };
 
         let mut d = match x11cap::Capturer::new(capture_region) {
@@ -125,12 +97,21 @@ fn main() {
                 return false;
             }
         };
-
-        let is_recording = *(recording_clone.lock().unwrap());
+        let mut is_recording = is_rec_clone.read().unwrap();
+        let mut is_rec = *is_recording;
+        drop(is_recording);
 
         let mut count = 0;
+        while is_rec {
+            is_recording = is_rec_clone.read().unwrap();
 
-        while is_recording {
+            is_rec = *is_recording;
+
+            drop(is_recording);
+
+
+            println!("IS_RECORDING? {}", is_rec);
+
 
             let mut q = match d.capture_frame() {
                 Ok(v) => v,
@@ -138,29 +119,42 @@ fn main() {
                     return false;
                 }
             };
+            let dimensions = q.get_dimensions();
 
-            let q = record::Image { Image: q };
+            let q = record::Image {
+                id: count,
+                Image: q,
+                width: dimensions.0 as u16,
+                height: dimensions.1 as u16,
+            };
 
-            println!("Recording Frame {} ", count);
+
+            //            println!("Recording Frame {} ", count);
 
             tx.send(q);
             count += 1;
 
-            thread::sleep_ms(200);
+            thread::sleep(time::Duration::from_millis(125));
 
         }
+
+        println!("STOPPED RECORDING");
+
         return false;
     });
 
+    let mut fs = match File::create("img.gif") {
+        Ok(v) => v,
+        Err(e) => {
+
+            println!("{}", e);
+            return;
+        }
+    };
+
+
     // start processor
-    processor::process(rx);
-
-    thread::sleep_ms(10000);
-
-    let mut d = *(recording.lock().unwrap());
-    //    selectora):draw_selection_window(&giraffe);
-    d = false;
-
+    processor::process(rx, &mut fs);
 }
 
 fn start_capturing() {

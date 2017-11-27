@@ -26,8 +26,15 @@ struct Pointer {
 }
 
 impl Selector {
-    fn new(dpy: *mut xlib::Display) -> Selector {
-        Selector { display: dpy }
+    fn new(id: *const raw::c_char) -> Selector {
+
+        let display;
+
+        unsafe {
+            display = xlib::XOpenDisplay(id);
+        }
+
+        Selector { display }
     }
     fn get_root_window(&self) -> xlib::Window {
         unsafe { xlib::XDefaultRootWindow(self.display) }
@@ -146,10 +153,8 @@ impl Selector {
 }
 
 
-pub fn draw_selection_window(g: &super::Giraffe) {
-    let mut s = Selector::new(g.display);
-
-    info!("This display has {} screens", g.screen_count);
+pub fn draw_selection_window(id: String) {
+    let mut s = Selector::new(CString::new(id).unwrap().as_ptr());
 
     let grabbed = s.grab_pointer();
     if !grabbed {
