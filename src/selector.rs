@@ -8,12 +8,11 @@ use std::os::raw;
 use std::ffi::CString;
 use std::{mem, ptr};
 
-
 #[derive(Debug)]
-pub struct Selector {
+struct Selector {
     display: *mut xlib::Display,
-    screens: i32,
 }
+
 
 #[derive(Debug)]
 struct Pointer {
@@ -27,24 +26,12 @@ struct Pointer {
 }
 
 impl Selector {
-    fn new(dpy_id: *const raw::c_char) -> Selector {
-
-        let dpy = open_display(dpy_id);
-
-        let screen_count = unsafe { xlib::XScreenCount(dpy) };
-
-        let mut s = Selector {
-            display: dpy,
-            screens: screen_count,
-        };
-
-        s
+    fn new(dpy: *mut xlib::Display) -> Selector {
+        Selector { display: dpy }
     }
-
     fn get_root_window(&self) -> xlib::Window {
         unsafe { xlib::XDefaultRootWindow(self.display) }
     }
-
     fn query_pointer(&self) -> Option<Pointer> {
 
         let mut win: xlib::Window;
@@ -159,10 +146,10 @@ impl Selector {
 }
 
 
-pub fn draw_selection_window(mon_id: *const raw::c_char) {
-    let mut s = Selector::new(mon_id);
+pub fn draw_selection_window(g: &super::Giraffe) {
+    let mut s = Selector::new(g.display);
 
-    info!("This display has {} screens", s.screens);
+    info!("This display has {} screens", g.screen_count);
 
     let grabbed = s.grab_pointer();
     if !grabbed {
@@ -198,19 +185,22 @@ pub fn draw_selection_window(mon_id: *const raw::c_char) {
                 xlib::MotionNotify => {
 
                     // Left Mouse Button
-                    s.draw_rectangle(x, y, evt.button.x_root as u32, evt.button.y_root as u32);
 
+                    while draw_rectangle {
+                        s.draw_rectangle(x, y, evt.button.x_root as u32, evt.button.y_root as u32);
+                    }
                     println!("{:?}", evt);
 
                 }
-                //                xlib::ButtonRelease => {
+                xlib::ButtonRelease => {
 
                     // Left Mouse Button
-  //                  if evt.button.button == 1 {
-    //                    println!("Left Mouse Button Released");
-      //              }
+                    if evt.button.button == 1 {
+                        draw_rectangle = false;
 
-        //        }
+                    }
+
+                }
                 _ => {
                     //println!("{:?}", evt);
                 }
