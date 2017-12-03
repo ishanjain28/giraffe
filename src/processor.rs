@@ -63,7 +63,6 @@ pub fn process(rx: mpsc::Receiver<record::Image>, f: &mut File) {
         }
     });
 
-
     let mut results = Vec::new();
 
     loop {
@@ -78,42 +77,12 @@ pub fn process(rx: mpsc::Receiver<record::Image>, f: &mut File) {
         }
     }
 
-    let res_len = results.len() - 1;
-    quick_sort(&mut results, 0, res_len as u64 - 1);
-
     for i in results {
 
         println!("Writing frame {} ", i.id);
 
         filef.write_frame(&i.frame);
     }
-}
-
-fn quick_sort(v: &mut Vec<record::gifFrame>, start: u64, end: u64) {
-
-    if start < end {
-        let q = partition(v, start, end);
-        quick_sort(v, start, q - 1);
-        quick_sort(v, q + 1, end);
-    }
-
-}
-
-fn partition(v: &mut Vec<record::gifFrame>, start: u64, end: u64) -> u64 {
-    let key = v[end as usize].id;
-
-    let mut i = start - 1;
-
-    for j in start..end {
-
-        if v[j as usize].id <= key {
-            i += 1;
-            v.swap(i as usize, j as usize);
-        }
-    }
-
-    v.swap(i as usize + 1, end as usize);
-    return i + 1;
 }
 
 fn convert(s: &[x11cap::Bgr8]) -> Vec<u8> {
